@@ -5,6 +5,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use crate::binaries::get_binary_manager;
 use crate::error::{ExportError, ExportResult};
 use crate::export::FfmpegProgressParser;
@@ -310,8 +313,11 @@ impl MontageExporter {
         cmd.args(["-movflags", "+faststart", "-progress", "pipe:2"]);
         cmd.arg(output_path);
 
+        cmd.stdin(std::process::Stdio::null());
         cmd.stderr(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         cmd
     }

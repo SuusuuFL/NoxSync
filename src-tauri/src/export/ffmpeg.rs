@@ -4,6 +4,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use super::{ClipTiming, FfmpegProgressParser};
 use crate::binaries::get_binary_manager;
 use crate::config::{get_config, VideoEncoder};
@@ -72,8 +75,11 @@ impl FfmpegExporter {
             "pipe:2", // Output progress to stderr
         ]);
         cmd.arg(output);
+        cmd.stdin(std::process::Stdio::null());
         cmd.stderr(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         cmd
     }
 
@@ -145,8 +151,11 @@ impl FfmpegExporter {
         // Output optimization + progress
         cmd.args(["-movflags", "+faststart", "-progress", "pipe:2"]);
         cmd.arg(output);
+        cmd.stdin(std::process::Stdio::null());
         cmd.stderr(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         cmd
     }
@@ -215,16 +224,21 @@ impl FfmpegExporter {
 
     /// Verify the output file with ffprobe
     pub async fn verify_output(&self, path: &Path, expected_duration: f64) -> ExportResult<()> {
-        let output = Command::new(self.ffprobe_path())
-            .args([
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-            ])
-            .arg(path)
+        let mut cmd = Command::new(self.ffprobe_path());
+        cmd.args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+        ]);
+        cmd.arg(path);
+        cmd.stdin(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let output = cmd
             .output()
             .await
             .map_err(|e| ExportError::Ffmpeg(format!("Failed to run ffprobe: {}", e)))?;
@@ -240,8 +254,9 @@ impl FfmpegExporter {
             ExportError::CorruptedOutput("Failed to parse duration from ffprobe".to_string())
         })?;
 
-        // Allow 10% tolerance or 1 second, whichever is larger
-        let tolerance = (expected_duration * 0.1).max(1.0);
+        // Allow 15% tolerance or 1.5 seconds, whichever is larger
+        // This handles cases where VOD streams may have slight gaps or end slightly early
+        let tolerance = (expected_duration * 0.15).max(1.5);
         if (actual_duration - expected_duration).abs() > tolerance {
             return Err(ExportError::DurationMismatch {
                 expected: expected_duration,

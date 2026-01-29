@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NoxSync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "com.suusuufl.nox",
   "build": {
     "beforeDevCommand": "pnpm dev",

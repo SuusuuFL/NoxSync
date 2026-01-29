@@ -47,8 +47,8 @@ export function ActionMode() {
   const handleAddAction = () => {
     if (project.gameStartTime === null) return;
     const gameTime = currentTime - project.gameStartTime;
-    const actionNumber = project.actions.length + 1;
-    addAction(`Action ${actionNumber}`, gameTime);
+    // Use game time as default name for better chronological clarity
+    addAction(formatTime(gameTime), gameTime);
   };
 
   const handleJumpToAction = (gameTime: number) => {
