@@ -81,7 +81,18 @@ impl BinaryManager {
 
     /// Get the version of a binary
     fn get_version(&self, binary_path: &PathBuf) -> Option<String> {
-        let output = Command::new(binary_path).arg("-version").output().ok()?;
+        #[cfg(target_os = "windows")]
+        use std::os::windows::process::CommandExt;
+
+        let mut cmd = Command::new(binary_path);
+        cmd.arg("-version");
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let output = cmd.output().ok()?;
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);

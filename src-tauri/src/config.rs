@@ -112,9 +112,18 @@ impl VideoEncoder {
 
     /// Check if this encoder is available
     fn is_available_with(&self, ffmpeg_cmd: &str) -> bool {
-        let output = Command::new(ffmpeg_cmd)
-            .args(["-hide_banner", "-encoders"])
-            .output();
+        #[cfg(target_os = "windows")]
+        use std::os::windows::process::CommandExt;
+
+        let mut cmd = Command::new(ffmpeg_cmd);
+        cmd.args(["-hide_banner", "-encoders"]);
+        cmd.stdin(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::null());
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+        let output = cmd.output();
 
         match output {
             Ok(result) => {

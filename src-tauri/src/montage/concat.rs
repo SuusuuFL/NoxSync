@@ -317,7 +317,7 @@ impl MontageExporter {
         cmd.stderr(std::process::Stdio::piped());
         cmd.stdout(std::process::Stdio::null());
         #[cfg(target_os = "windows")]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.as_std_mut().creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         cmd
     }

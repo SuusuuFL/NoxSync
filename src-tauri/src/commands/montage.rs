@@ -230,16 +230,24 @@ async fn get_video_duration(path: &PathBuf) -> Result<f64, String> {
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "ffprobe".to_string());
 
-    let output = Command::new(&ffprobe_path)
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-        ])
-        .arg(path)
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let mut cmd = Command::new(&ffprobe_path);
+    cmd.args([
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+    ]);
+    cmd.arg(path);
+    cmd.stdin(std::process::Stdio::null());
+    #[cfg(target_os = "windows")]
+    cmd.as_std_mut().creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    let output = cmd
         .output()
         .await
         .map_err(|e| format!("Failed to run ffprobe: {}", e))?;

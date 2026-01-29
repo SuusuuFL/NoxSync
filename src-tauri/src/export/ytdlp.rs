@@ -4,6 +4,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::time::timeout;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use super::{ClipTiming, YtDlpProgressParser};
 use crate::binaries::get_binary_manager;
 use crate::error::{ExportError, ExportResult};
@@ -92,8 +95,11 @@ impl YtDlpExporter {
         ]);
 
         cmd.arg(url);
+        cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
+        #[cfg(target_os = "windows")]
+        cmd.as_std_mut().creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         cmd
     }
