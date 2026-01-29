@@ -6,8 +6,6 @@ import {
   Clock,
   Play,
   ExternalLink,
-  Sparkles,
-  Film,
 } from 'lucide-react';
 import { useProjectStore } from '@/stores';
 import { PLATFORMS } from '@/types';

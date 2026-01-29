@@ -199,7 +199,7 @@ export function Dashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredProjects.map((project) => {
               const referenceStreamer = project.streamers.find((s) => s.isReference);
-              const syncedCount = project.streamers.filter((s) => s.syncOffset !== null).length;
+
               const includedClips = project.actions.flatMap((a) => a.clips).filter((c) => c.status === 'included').length;
               const gameInfo = getProjectGameInfo(project.gameType, project.customGameId);
 

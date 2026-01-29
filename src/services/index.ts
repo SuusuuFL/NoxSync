@@ -15,7 +15,7 @@ export {
 
 // Project services
 export {
-  saveProject,
+  saveProjectToDisk as saveProject,
   loadProject,
   deleteProject,
   listProjects,
