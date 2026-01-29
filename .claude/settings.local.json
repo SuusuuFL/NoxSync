@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(dir:*)",
+      "Bash(cargo check:*)",
+      "Bash(npm run type-check:*)",
+      "Bash(npm run build:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "shadcn"
+  ]
+}
