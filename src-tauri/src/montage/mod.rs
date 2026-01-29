@@ -1,3 +1,3 @@
 mod concat;
 
-pub use concat::{MontageExporter, MontageConfig, MontageClip, OverlayConfig, OverlayPosition};
+pub use concat::{MontageClip, MontageConfig, MontageExporter, OverlayConfig, OverlayPosition};

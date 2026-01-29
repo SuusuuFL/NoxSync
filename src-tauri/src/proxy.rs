@@ -34,7 +34,10 @@ fn resolve_url(base_url: &str, relative: &str) -> String {
     }
 
     // Fallback: simple path-based resolution
-    let base_dir = base_url.rsplit_once('/').map(|(b, _)| b).unwrap_or(base_url);
+    let base_dir = base_url
+        .rsplit_once('/')
+        .map(|(b, _)| b)
+        .unwrap_or(base_url);
     format!("{}/{}", base_dir, relative)
 }
 
@@ -141,7 +144,11 @@ async fn proxy_handler(
                 }
                 Err(e) => {
                     log::error!("[Proxy] Failed to read body: {}", e);
-                    (StatusCode::BAD_GATEWAY, format!("Failed to read body: {}", e)).into_response()
+                    (
+                        StatusCode::BAD_GATEWAY,
+                        format!("Failed to read body: {}", e),
+                    )
+                        .into_response()
                 }
             }
         }

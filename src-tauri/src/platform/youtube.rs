@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
-use crate::error::PlatformResult;
 use super::{ResolvedVod, VodResolver};
+use crate::error::PlatformResult;
 
 /// YouTube resolver - delegates to yt-dlp for actual resolution
 /// We just pass through the URL since yt-dlp handles YouTube natively

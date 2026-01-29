@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
 import type { GlobalStreamer, StreamerUniqueKey, Preset, CustomGame, GameType } from '@/types';
+import type { LibraryData } from '@/services/library';
 import { generateId, getStreamerUniqueKey } from '@/types';
 import type { Platform } from '@/types';
 
@@ -51,12 +52,15 @@ interface StreamerDatabaseActions {
 
   // Internal
   _rebuildIndex: () => void;
+  loadLibrary: (data: Omit<LibraryData, 'version' | 'updatedAt'>) => void;
 }
 
 type StreamerDatabaseStore = StreamerDatabaseState & StreamerDatabaseActions;
 
+// ... imports
+
 export const useStreamerDatabaseStore = create<StreamerDatabaseStore>()(
-  persist(
+  subscribeWithSelector(
     (set, get) => ({
       globalStreamers: [],
       customGames: [],
@@ -303,32 +307,54 @@ export const useStreamerDatabaseStore = create<StreamerDatabaseStore>()(
 
       // ============ Internal ============
 
-      _rebuildIndex: () => {
-        set((state) => {
-          const newIndex = new Map<StreamerUniqueKey, string>();
-          for (const s of state.globalStreamers) {
-            const key = getStreamerUniqueKey(s.channel, s.platform);
-            newIndex.set(key, s.id);
-          }
-          return { _streamerIndex: newIndex };
-        });
-      },
-    }),
-    {
-      name: 'nox-streamer-database',
-      // Custom serialization to handle Map
-      partialize: (state) => ({
-        globalStreamers: state.globalStreamers,
-        customGames: state.customGames,
-        presets: state.presets,
-        // Don't persist the index - it's rebuilt on hydration
-      }),
-      onRehydrateStorage: () => (state) => {
-        // Rebuild the index after hydration
-        if (state) {
-          state._rebuildIndex();
-        }
-      },
+  // Internal
+  _rebuildIndex: () => {
+    set((state) => {
+      const newIndex = new Map<StreamerUniqueKey, string>();
+      for (const s of state.globalStreamers) {
+        const key = getStreamerUniqueKey(s.channel, s.platform);
+        newIndex.set(key, s.id);
+      }
+      return { _streamerIndex: newIndex };
+    });
+  },
+
+  // Load library from disk
+  loadLibrary: (data) => {
+    set((state) => {
+      // Rebuild index
+      const newIndex = new Map<StreamerUniqueKey, string>();
+      for (const s of data.globalStreamers) {
+        const key = getStreamerUniqueKey(s.channel, s.platform);
+        newIndex.set(key, s.id);
+      }
+
+      return {
+        globalStreamers: data.globalStreamers,
+        customGames: data.customGames,
+        presets: data.presets,
+        _streamerIndex: newIndex,
+      };
+    });
+  },
+})));
+
+// Subscribe to changes and sync to disk
+useStreamerDatabaseStore.subscribe(
+  (state) => ({
+    globalStreamers: state.globalStreamers,
+    customGames: state.customGames,
+    presets: state.presets,
+  }),
+  async (data) => {
+    // Dynamic import to avoid circular dependency
+    const { useSettingsStore } = await import('./settingsStore');
+    const workDir = useSettingsStore.getState().workDir;
+    
+    if (workDir) {
+       const { saveLibraryToDisk } = await import('@/services/library');
+       // We can debounce this if needed, but for now direct save is safer
+       saveLibraryToDisk(workDir, data);
     }
-  )
+  }
 );

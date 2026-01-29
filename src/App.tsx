@@ -8,12 +8,14 @@ import { ProjectEdition } from '@/pages/ProjectEdition';
 import { ProjectMontage } from '@/pages/ProjectMontage';
 import { ProjectExport } from '@/pages/ProjectExport';
 import { useTheme } from '@/hooks';
+import { AppInitialization } from '@/components/AppInitialization';
 import './App.css';
 
 export default function App() {
   useTheme(); // Initialize theme
   return (
     <BrowserRouter>
+      <AppInitialization />
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/project/:projectId" element={<ProjectLayout />}>

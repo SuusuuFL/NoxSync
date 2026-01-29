@@ -1,9 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::RwLock;
-use serde::{Deserialize, Serialize};
 
-use crate::binaries::{get_binary_manager, get_config_path, ensure_config_dir};
+use crate::binaries::{ensure_config_dir, get_binary_manager, get_config_path};
 
 /// Persisted configuration (saved to config.json)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -18,17 +18,15 @@ impl PersistedConfig {
         let path = get_config_path();
         if path.exists() {
             match std::fs::read_to_string(&path) {
-                Ok(content) => {
-                    match serde_json::from_str(&content) {
-                        Ok(config) => {
-                            log::info!("Loaded config from {:?}", path);
-                            return config;
-                        }
-                        Err(e) => {
-                            log::warn!("Failed to parse config: {}", e);
-                        }
+                Ok(content) => match serde_json::from_str(&content) {
+                    Ok(config) => {
+                        log::info!("Loaded config from {:?}", path);
+                        return config;
                     }
-                }
+                    Err(e) => {
+                        log::warn!("Failed to parse config: {}", e);
+                    }
+                },
                 Err(e) => {
                     log::warn!("Failed to read config: {}", e);
                 }
@@ -99,11 +97,7 @@ impl VideoEncoder {
         };
 
         // Try hardware encoders first (faster)
-        let hw_encoders = [
-            Self::H264Nvenc,
-            Self::H264Amf,
-            Self::H264Qsv,
-        ];
+        let hw_encoders = [Self::H264Nvenc, Self::H264Amf, Self::H264Qsv];
 
         for encoder in hw_encoders {
             if encoder.is_available_with(&ffmpeg_cmd) {
@@ -153,7 +147,9 @@ fn default_output_dir() -> PathBuf {
 impl Default for Config {
     fn default() -> Self {
         let persisted = PersistedConfig::load();
-        let output_dir = persisted.output_dir.clone()
+        let output_dir = persisted
+            .output_dir
+            .clone()
             .unwrap_or_else(default_output_dir);
 
         Self {
@@ -177,7 +173,8 @@ impl Config {
 
     /// Get the clips directory for a specific streamer
     pub fn streamer_clips_dir(&self, project_name: &str, streamer_name: &str) -> PathBuf {
-        self.clips_dir(project_name).join(sanitize_name(streamer_name))
+        self.clips_dir(project_name)
+            .join(sanitize_name(streamer_name))
     }
 
     /// Ensure the clips directory exists
@@ -190,7 +187,11 @@ impl Config {
     }
 
     /// Ensure the streamer clips directory exists
-    pub fn ensure_streamer_clips_dir(&self, project_name: &str, streamer_name: &str) -> std::io::Result<PathBuf> {
+    pub fn ensure_streamer_clips_dir(
+        &self,
+        project_name: &str,
+        streamer_name: &str,
+    ) -> std::io::Result<PathBuf> {
         let dir = self.streamer_clips_dir(project_name, streamer_name);
         if !dir.exists() {
             std::fs::create_dir_all(&dir)?;

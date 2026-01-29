@@ -1,14 +1,14 @@
 use std::path::Path;
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tokio::time::timeout;
 
+use super::{ClipTiming, FfmpegProgressParser};
 use crate::binaries::get_binary_manager;
 use crate::config::{get_config, VideoEncoder};
 use crate::error::{ExportError, ExportResult};
 use crate::platform::ResolvedVod;
-use super::{ClipTiming, FfmpegProgressParser};
 
 /// Timeout for a single clip export (5 minutes)
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(300);
@@ -54,21 +54,22 @@ impl FfmpegExporter {
     }
 
     /// Build FFmpeg command for stream copy (fastest)
-    fn build_copy_command(
-        &self,
-        input: &str,
-        timing: &ClipTiming,
-        output: &Path,
-    ) -> Command {
+    fn build_copy_command(&self, input: &str, timing: &ClipTiming, output: &Path) -> Command {
         let mut cmd = Command::new(self.ffmpeg_path());
         cmd.args([
-            "-y",                           // Overwrite output
-            "-ss", &timing.start.to_string(), // Seek before input (fast)
-            "-i", input,                    // Input URL
-            "-t", &timing.duration.to_string(), // Duration
-            "-c", "copy",                   // Copy codecs (no re-encode)
-            "-movflags", "+faststart",      // Web optimization
-            "-progress", "pipe:2",          // Output progress to stderr
+            "-y", // Overwrite output
+            "-ss",
+            &timing.start.to_string(), // Seek before input (fast)
+            "-i",
+            input, // Input URL
+            "-t",
+            &timing.duration.to_string(), // Duration
+            "-c",
+            "copy", // Copy codecs (no re-encode)
+            "-movflags",
+            "+faststart", // Web optimization
+            "-progress",
+            "pipe:2", // Output progress to stderr
         ]);
         cmd.arg(output);
         cmd.stderr(std::process::Stdio::piped());
@@ -77,61 +78,69 @@ impl FfmpegExporter {
     }
 
     /// Build FFmpeg command for re-encoding
-    fn build_encode_command(
-        &self,
-        input: &str,
-        timing: &ClipTiming,
-        output: &Path,
-    ) -> Command {
+    fn build_encode_command(&self, input: &str, timing: &ClipTiming, output: &Path) -> Command {
         let config = get_config();
         let ffmpeg_config = &config.ffmpeg;
 
         let mut cmd = Command::new(self.ffmpeg_path());
         cmd.args([
             "-y",
-            "-ss", &timing.start.to_string(),
-            "-i", input,
-            "-t", &timing.duration.to_string(),
+            "-ss",
+            &timing.start.to_string(),
+            "-i",
+            input,
+            "-t",
+            &timing.duration.to_string(),
         ]);
 
         // Video encoding
         match ffmpeg_config.encoder {
             VideoEncoder::Libx264 => {
                 cmd.args([
-                    "-c:v", "libx264",
-                    "-preset", &ffmpeg_config.preset,
-                    "-crf", &ffmpeg_config.crf.to_string(),
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    &ffmpeg_config.preset,
+                    "-crf",
+                    &ffmpeg_config.crf.to_string(),
                 ]);
             }
             VideoEncoder::H264Nvenc => {
                 cmd.args([
-                    "-c:v", "h264_nvenc",
-                    "-preset", "p4", // NVENC preset
-                    "-cq", &ffmpeg_config.crf.to_string(),
+                    "-c:v",
+                    "h264_nvenc",
+                    "-preset",
+                    "p4", // NVENC preset
+                    "-cq",
+                    &ffmpeg_config.crf.to_string(),
                 ]);
             }
             VideoEncoder::H264Amf => {
                 cmd.args([
-                    "-c:v", "h264_amf",
-                    "-quality", "speed",
-                    "-rc", "cqp",
-                    "-qp", &ffmpeg_config.crf.to_string(),
+                    "-c:v",
+                    "h264_amf",
+                    "-quality",
+                    "speed",
+                    "-rc",
+                    "cqp",
+                    "-qp",
+                    &ffmpeg_config.crf.to_string(),
                 ]);
             }
             VideoEncoder::H264Qsv => {
                 cmd.args([
-                    "-c:v", "h264_qsv",
-                    "-preset", "fast",
-                    "-global_quality", &ffmpeg_config.crf.to_string(),
+                    "-c:v",
+                    "h264_qsv",
+                    "-preset",
+                    "fast",
+                    "-global_quality",
+                    &ffmpeg_config.crf.to_string(),
                 ]);
             }
         }
 
         // Audio encoding
-        cmd.args([
-            "-c:a", "aac",
-            "-b:a", &ffmpeg_config.audio_bitrate,
-        ]);
+        cmd.args(["-c:a", "aac", "-b:a", &ffmpeg_config.audio_bitrate]);
 
         // Output optimization + progress
         cmd.args(["-movflags", "+faststart", "-progress", "pipe:2"]);
@@ -155,7 +164,9 @@ impl FfmpegExporter {
             .spawn()
             .map_err(|e| ExportError::Ffmpeg(format!("Failed to start FFmpeg: {}", e)))?;
 
-        let stderr = child.stderr.take()
+        let stderr = child
+            .stderr
+            .take()
             .ok_or_else(|| ExportError::Ffmpeg("Failed to capture stderr".to_string()))?;
 
         let parser = FfmpegProgressParser::new(duration);
@@ -181,16 +192,16 @@ impl FfmpegExporter {
                 }
             }
             child.wait().await
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(Ok(status)) if status.success() => Ok(()),
-            Ok(Ok(status)) => {
-                Err(ExportError::Ffmpeg(format!("FFmpeg exited with code: {}", status)))
-            }
-            Ok(Err(e)) => {
-                Err(ExportError::Ffmpeg(format!("FFmpeg error: {}", e)))
-            }
+            Ok(Ok(status)) => Err(ExportError::Ffmpeg(format!(
+                "FFmpeg exited with code: {}",
+                status
+            ))),
+            Ok(Err(e)) => Err(ExportError::Ffmpeg(format!("FFmpeg error: {}", e))),
             Err(_) => {
                 // Timeout - kill the process
                 let _ = child.kill().await;
@@ -206,9 +217,12 @@ impl FfmpegExporter {
     pub async fn verify_output(&self, path: &Path, expected_duration: f64) -> ExportResult<()> {
         let output = Command::new(self.ffprobe_path())
             .args([
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
             ])
             .arg(path)
             .output()
@@ -217,15 +231,14 @@ impl FfmpegExporter {
 
         if !output.status.success() {
             return Err(ExportError::CorruptedOutput(
-                "ffprobe failed to read output file".to_string()
+                "ffprobe failed to read output file".to_string(),
             ));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let actual_duration: f64 = stdout.trim().parse()
-            .map_err(|_| ExportError::CorruptedOutput(
-                "Failed to parse duration from ffprobe".to_string()
-            ))?;
+        let actual_duration: f64 = stdout.trim().parse().map_err(|_| {
+            ExportError::CorruptedOutput("Failed to parse duration from ffprobe".to_string())
+        })?;
 
         // Allow 10% tolerance or 1 second, whichever is larger
         let tolerance = (expected_duration * 0.1).max(1.0);
@@ -256,14 +269,20 @@ impl FfmpegExporter {
         for attempt in 1..=MAX_RETRIES {
             log::info!(
                 "[FFmpeg] Export attempt {}/{}: start={:.2}s, duration={:.2}s",
-                attempt, MAX_RETRIES, timing.start, timing.duration
+                attempt,
+                MAX_RETRIES,
+                timing.start,
+                timing.duration
             );
 
             // Try copy first if enabled and this is the first attempt
             if self.try_copy_first && attempt == 1 {
                 let copy_cmd = self.build_copy_command(&vod.url, timing, output_path);
 
-                match self.run_command_with_progress(copy_cmd, timing.duration, progress).await {
+                match self
+                    .run_command_with_progress(copy_cmd, timing.duration, progress)
+                    .await
+                {
                     Ok(()) => {
                         // Verify output
                         if let Err(e) = self.verify_output(output_path, timing.duration).await {
@@ -284,7 +303,10 @@ impl FfmpegExporter {
             // Try re-encoding
             let encode_cmd = self.build_encode_command(&vod.url, timing, output_path);
 
-            match self.run_command_with_progress(encode_cmd, timing.duration, progress).await {
+            match self
+                .run_command_with_progress(encode_cmd, timing.duration, progress)
+                .await
+            {
                 Ok(()) => {
                     // Verify output
                     if let Err(e) = self.verify_output(output_path, timing.duration).await {

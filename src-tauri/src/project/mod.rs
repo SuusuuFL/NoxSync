@@ -3,10 +3,10 @@ mod schema;
 // Re-export schema types
 pub use schema::ProjectFile;
 
-use std::path::PathBuf;
-use std::fs;
 use crate::config::get_config;
 use crate::error::{NoxError, Result};
+use std::fs;
+use std::path::PathBuf;
 
 /// Get the path to project.json for a project
 pub fn get_project_file_path(project_name: &str) -> PathBuf {
@@ -90,4 +90,3 @@ pub fn delete_project(project_name: &str) -> Result<()> {
 
     Ok(())
 }
-

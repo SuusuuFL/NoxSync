@@ -9,24 +9,10 @@ mod project;
 mod proxy;
 
 use commands::{
-    check_clips_status,
-    export_clips,
-    get_clips_dir,
-    open_clips_folder,
-    resolve_vod_url,
-    get_proxy_url,
-    check_binaries,
-    download_binary,
-    get_work_dir,
-    set_work_dir,
-    pick_work_dir,
-    save_project,
-    load_project,
-    list_projects,
-    delete_project_files,
-    export_montage,
-    list_project_clips,
-    open_montages_folder,
+    check_binaries, check_clips_status, delete_project_files, download_binary, export_clips,
+    export_montage, get_clips_dir, get_proxy_url, get_work_dir, list_project_clips, list_projects,
+    load_project, open_clips_folder, open_montages_folder, pick_work_dir, resolve_vod_url,
+    save_project, set_work_dir,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -46,6 +32,7 @@ pub fn run() {
     });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![

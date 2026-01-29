@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{PlatformError, PlatformResult};
 use super::{ResolvedVod, VodResolver};
+use crate::error::{PlatformError, PlatformResult};
 
 const CLIENT_ID: &str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 const GQL_URL: &str = "https://gql.twitch.tv/gql";
@@ -36,7 +36,8 @@ impl TwitchResolver {
             ),
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(GQL_URL)
             .header("Client-Id", CLIENT_ID)
             .json(&query)
@@ -66,13 +67,9 @@ impl TwitchResolver {
         let broadcast_type = metadata.broadcast_type.to_lowercase();
 
         if broadcast_type == "highlight" {
-            format!(
-                "https://{domain}/{vod_special_id}/{quality}/highlight-{vod_id}.m3u8"
-            )
+            format!("https://{domain}/{vod_special_id}/{quality}/highlight-{vod_id}.m3u8")
         } else {
-            format!(
-                "https://{domain}/{vod_special_id}/{quality}/index-dvr.m3u8"
-            )
+            format!("https://{domain}/{vod_special_id}/{quality}/index-dvr.m3u8")
         }
     }
 
@@ -106,7 +103,9 @@ impl TwitchResolver {
 
         let vod_special_id = path_segments
             .get(storyboards_idx - 1)
-            .ok_or_else(|| PlatformError::ParseError("Could not extract VOD special ID".to_string()))?
+            .ok_or_else(|| {
+                PlatformError::ParseError("Could not extract VOD special ID".to_string())
+            })?
             .to_string();
 
         Ok((domain, vod_special_id))
@@ -126,8 +125,8 @@ impl VodResolver for TwitchResolver {
     }
 
     async fn resolve(&self, url: &str) -> PlatformResult<ResolvedVod> {
-        let vod_id = Self::extract_vod_id(url)
-            .ok_or_else(|| PlatformError::InvalidUrl(url.to_string()))?;
+        let vod_id =
+            Self::extract_vod_id(url).ok_or_else(|| PlatformError::InvalidUrl(url.to_string()))?;
 
         log::info!("[Twitch] Resolving VOD {}", vod_id);
 
@@ -142,17 +141,16 @@ impl VodResolver for TwitchResolver {
         // Parse seek URL
         let (domain, vod_special_id) = Self::parse_seek_url(seek_url)?;
 
-        log::debug!("[Twitch] Domain: {}, Special ID: {}", domain, vod_special_id);
+        log::debug!(
+            "[Twitch] Domain: {}, Special ID: {}",
+            domain,
+            vod_special_id
+        );
 
         // Try each quality
         for quality in QUALITIES {
-            let playlist_url = self.build_playlist_url(
-                &domain,
-                &vod_special_id,
-                &vod_id,
-                quality,
-                &metadata,
-            );
+            let playlist_url =
+                self.build_playlist_url(&domain, &vod_special_id, &vod_id, quality, &metadata);
 
             log::debug!("[Twitch] Trying quality {}: {}", quality, playlist_url);
 

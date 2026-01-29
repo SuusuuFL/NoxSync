@@ -1,12 +1,12 @@
 mod download;
 mod paths;
 
-pub use download::{BinaryType, download_binary};
-pub use paths::{get_binary_path, get_config_path, ensure_config_dir};
+pub use download::{download_binary, BinaryType};
+pub use paths::{ensure_config_dir, get_binary_path, get_config_path};
 
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use serde::{Deserialize, Serialize};
 
 /// Status of installed binaries
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,10 +81,7 @@ impl BinaryManager {
 
     /// Get the version of a binary
     fn get_version(&self, binary_path: &PathBuf) -> Option<String> {
-        let output = Command::new(binary_path)
-            .arg("-version")
-            .output()
-            .ok()?;
+        let output = Command::new(binary_path).arg("-version").output().ok()?;
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -154,4 +151,3 @@ static BINARY_MANAGER: OnceLock<BinaryManager> = OnceLock::new();
 pub fn get_binary_manager() -> &'static BinaryManager {
     BINARY_MANAGER.get_or_init(BinaryManager::new)
 }
-

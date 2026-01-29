@@ -2,7 +2,10 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::config::get_config;
-use crate::montage::{MontageConfig, MontageClip as MontageConcatClip, MontageExporter, OverlayConfig, OverlayPosition};
+use crate::montage::{
+    MontageClip as MontageConcatClip, MontageConfig, MontageExporter, OverlayConfig,
+    OverlayPosition,
+};
 
 /// Input for a single clip in the montage
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -82,15 +85,15 @@ pub async fn export_montage(
     config: MontageExportInput,
 ) -> Result<MontageExportResult, String> {
     let app_config = get_config();
-    
+
     // Build paths
     let project_dir = app_config.output_dir.join(&project_name);
     let montages_dir = project_dir.join("montages");
-    
+
     // Create montages directory if needed
     std::fs::create_dir_all(&montages_dir)
         .map_err(|e| format!("Failed to create montages directory: {}", e))?;
-    
+
     // Generate output filename
     let output_filename = if let Some(name) = &config.output_filename {
         if name.ends_with(".mp4") {
@@ -102,11 +105,12 @@ pub async fn export_montage(
         let timestamp = get_timestamp();
         format!("{}_montage_{}.mp4", project_name, timestamp)
     };
-    
+
     let output_path = montages_dir.join(&output_filename);
-    
+
     // Convert input clips to internal format
-    let clips: Vec<MontageConcatClip> = config.clips
+    let clips: Vec<MontageConcatClip> = config
+        .clips
         .iter()
         .map(|c| MontageConcatClip {
             path: PathBuf::from(&c.path),
@@ -114,7 +118,7 @@ pub async fn export_montage(
             streamer_name: c.streamer_name.clone(),
         })
         .collect();
-    
+
     // Convert overlay config if present
     let overlay = config.overlay.map(|o| OverlayConfig {
         text: o.text,
@@ -123,18 +127,18 @@ pub async fn export_montage(
         color: o.color,
         box_color: o.box_color,
     });
-    
+
     let montage_config = MontageConfig {
         clips,
         transition_duration: config.transition_duration,
         overlay,
     };
-    
+
     let total_duration = montage_config.total_duration();
-    
+
     // Export
     let exporter = MontageExporter::new();
-    
+
     match exporter.export(&montage_config, &output_path).await {
         Ok(()) => Ok(MontageExportResult {
             success: true,
@@ -156,20 +160,20 @@ pub async fn export_montage(
 pub async fn list_project_clips(project_name: String) -> Result<Vec<ClipInfo>, String> {
     let app_config = get_config();
     let clips_dir = app_config.output_dir.join(&project_name).join("clips");
-    
+
     if !clips_dir.exists() {
         return Ok(vec![]);
     }
-    
+
     let mut clips = Vec::new();
-    
+
     // Read top-level clips directory (contains streamer subdirectories)
     let entries = std::fs::read_dir(&clips_dir)
         .map_err(|e| format!("Failed to read clips directory: {}", e))?;
-    
+
     for entry in entries.flatten() {
         let path = entry.path();
-        
+
         // Check if it's an MP4 directly in clips folder
         if path.is_file() && path.extension().is_some_and(|ext| ext == "mp4") {
             if let Some(filename) = path.file_name() {
@@ -201,10 +205,10 @@ pub async fn list_project_clips(project_name: String) -> Result<Vec<ClipInfo>, S
             }
         }
     }
-    
+
     // Sort by filename
     clips.sort_by(|a, b| a.filename.cmp(&b.filename));
-    
+
     Ok(clips)
 }
 
@@ -220,29 +224,34 @@ pub struct ClipInfo {
 async fn get_video_duration(path: &PathBuf) -> Result<f64, String> {
     use crate::binaries::get_binary_manager;
     use tokio::process::Command;
-    
+
     let ffprobe_path = get_binary_manager()
         .ffprobe_path()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "ffprobe".to_string());
-    
+
     let output = Command::new(&ffprobe_path)
         .args([
-            "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
         ])
         .arg(path)
         .output()
         .await
         .map_err(|e| format!("Failed to run ffprobe: {}", e))?;
-    
+
     if !output.status.success() {
         return Err("ffprobe failed".to_string());
     }
-    
+
     let stdout = String::from_utf8_lossy(&output.stdout);
-    stdout.trim().parse::<f64>()
+    stdout
+        .trim()
+        .parse::<f64>()
         .map_err(|_| "Failed to parse duration".to_string())
 }
 
@@ -251,10 +260,10 @@ async fn get_video_duration(path: &PathBuf) -> Result<f64, String> {
 pub async fn open_montages_folder(project_name: String) -> Result<(), String> {
     let app_config = get_config();
     let montages_dir = app_config.output_dir.join(&project_name).join("montages");
-    
+
     std::fs::create_dir_all(&montages_dir)
         .map_err(|e| format!("Failed to create montages directory: {}", e))?;
-    
+
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("explorer")
@@ -262,7 +271,7 @@ pub async fn open_montages_folder(project_name: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
     }
-    
+
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
@@ -270,7 +279,7 @@ pub async fn open_montages_folder(project_name: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
     }
-    
+
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
@@ -278,6 +287,6 @@ pub async fn open_montages_folder(project_name: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
     }
-    
+
     Ok(())
 }

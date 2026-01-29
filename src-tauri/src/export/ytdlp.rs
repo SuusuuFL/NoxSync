@@ -1,13 +1,13 @@
 use std::path::Path;
 use std::time::Duration;
-use tokio::process::Command;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
 use tokio::time::timeout;
 
+use super::{ClipTiming, YtDlpProgressParser};
 use crate::binaries::get_binary_manager;
 use crate::error::{ExportError, ExportResult};
 use crate::platform::ResolvedVod;
-use super::{ClipTiming, YtDlpProgressParser};
 
 /// Timeout for a single clip export (5 minutes)
 const EXPORT_TIMEOUT: Duration = Duration::from_secs(300);
@@ -69,13 +69,12 @@ impl YtDlpExporter {
         let mut cmd = Command::new(self.ytdlp_path());
 
         // Format selection
-        cmd.args([
-            "-f", &format!("best[height<={}]", self.max_height),
-        ]);
+        cmd.args(["-f", &format!("best[height<={}]", self.max_height)]);
 
         // Time range
         cmd.args([
-            "--download-sections", &format!("*{}-{}", start_str, end_str),
+            "--download-sections",
+            &format!("*{}-{}", start_str, end_str),
         ]);
 
         // Force keyframes for accurate cuts
@@ -85,7 +84,8 @@ impl YtDlpExporter {
 
         // Output with progress
         cmd.args([
-            "-o", output.to_str().unwrap_or("output.mp4"),
+            "-o",
+            output.to_str().unwrap_or("output.mp4"),
             "--no-playlist",
             "--progress",
             "--newline",
@@ -110,7 +110,9 @@ impl YtDlpExporter {
             .spawn()
             .map_err(|e| ExportError::YtDlp(format!("Failed to start yt-dlp: {}", e)))?;
 
-        let stdout = child.stdout.take()
+        let stdout = child
+            .stdout
+            .take()
             .ok_or_else(|| ExportError::YtDlp("Failed to capture stdout".to_string()))?;
 
         let parser = YtDlpProgressParser::new();
@@ -136,16 +138,16 @@ impl YtDlpExporter {
                 }
             }
             child.wait().await
-        }).await;
+        })
+        .await;
 
         match result {
             Ok(Ok(status)) if status.success() => Ok(()),
-            Ok(Ok(status)) => {
-                Err(ExportError::YtDlp(format!("yt-dlp exited with code: {}", status)))
-            }
-            Ok(Err(e)) => {
-                Err(ExportError::YtDlp(format!("yt-dlp error: {}", e)))
-            }
+            Ok(Ok(status)) => Err(ExportError::YtDlp(format!(
+                "yt-dlp exited with code: {}",
+                status
+            ))),
+            Ok(Err(e)) => Err(ExportError::YtDlp(format!("yt-dlp error: {}", e))),
             Err(_) => {
                 // Timeout - kill the process
                 let _ = child.kill().await;
@@ -174,7 +176,10 @@ impl YtDlpExporter {
         for attempt in 1..=MAX_RETRIES {
             log::info!(
                 "[yt-dlp] Export attempt {}/{}: start={:.2}s, duration={:.2}s",
-                attempt, MAX_RETRIES, timing.start, timing.duration
+                attempt,
+                MAX_RETRIES,
+                timing.start,
+                timing.duration
             );
 
             // Try with force keyframes first

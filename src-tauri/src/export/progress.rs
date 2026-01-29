@@ -1,14 +1,12 @@
-use serde::Serialize;
 use regex::Regex;
+use serde::Serialize;
 
 /// Progress information for export operations
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExportProgress {
     /// Export has started
-    Started {
-        total_clips: usize,
-    },
+    Started { total_clips: usize },
     /// A clip export has started
     ClipStarted {
         index: usize,
@@ -22,10 +20,7 @@ pub enum ExportProgress {
         speed: Option<String>,
     },
     /// A clip export has completed
-    ClipCompleted {
-        index: usize,
-        status: ClipResult,
-    },
+    ClipCompleted { index: usize, status: ClipResult },
     /// All exports have finished
     Finished {
         exported: usize,
@@ -76,7 +71,9 @@ impl FfmpegProgressParser {
             };
 
             // Parse speed if available
-            let speed = self.speed_regex.captures(line)
+            let speed = self
+                .speed_regex
+                .captures(line)
                 .and_then(|c| c.get(1))
                 .map(|m| format!("{}x", m.as_str()));
 
@@ -114,7 +111,9 @@ impl YtDlpProgressParser {
         if let Some(caps) = self.percent_regex.captures(line) {
             let percent: f32 = caps.get(1)?.as_str().parse().ok()?;
 
-            let speed = self.speed_regex.captures(line)
+            let speed = self
+                .speed_regex
+                .captures(line)
                 .and_then(|c| c.get(1))
                 .map(|m| m.as_str().to_string());
 
@@ -145,10 +144,14 @@ mod tests {
     fn test_ytdlp_parser() {
         let parser = YtDlpProgressParser::new();
 
-        let (percent, _) = parser.parse_line("[download]  45.2% of 100.0MiB at 5.20MiB/s").unwrap();
+        let (percent, _) = parser
+            .parse_line("[download]  45.2% of 100.0MiB at 5.20MiB/s")
+            .unwrap();
         assert!((percent - 45.2).abs() < 0.1);
 
-        let (percent, speed) = parser.parse_line("[download] 100.0% of 50.00MiB at 10.00MiB/s").unwrap();
+        let (percent, speed) = parser
+            .parse_line("[download] 100.0% of 50.00MiB at 10.00MiB/s")
+            .unwrap();
         assert!((percent - 100.0).abs() < 0.1);
         assert!(speed.is_some());
     }

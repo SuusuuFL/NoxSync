@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tauri::Emitter;
 
-use crate::binaries::{BinaryStatus, BinaryType, get_binary_manager, download_binary as do_download_binary};
+use crate::binaries::{
+    download_binary as do_download_binary, get_binary_manager, BinaryStatus, BinaryType,
+};
 use crate::config::{get_config, get_config_mut};
-use crate::export::{ClipTiming, SmartExporter, ExportProgress, ClipResult};
+use crate::export::{ClipResult, ClipTiming, ExportProgress, SmartExporter};
 use crate::platform::VodResolverChain;
 use crate::project::{self, ProjectFile};
 use crate::proxy;
@@ -85,25 +87,29 @@ pub async fn export_clips(
         if output_path.exists() {
             log::info!("Skipping existing: {}", filename);
             skipped += 1;
-            let _ = app.emit("export-progress", ExportProgress::ClipCompleted {
-                index: clip.index,
-                status: ClipResult::Skipped,
-            });
+            let _ = app.emit(
+                "export-progress",
+                ExportProgress::ClipCompleted {
+                    index: clip.index,
+                    status: ClipResult::Skipped,
+                },
+            );
             continue;
         }
 
         // Emit clip started event
-        let _ = app.emit("export-progress", ExportProgress::ClipStarted {
-            index: clip.index,
-            action_name: clip.action_name.clone(),
-            streamer_name: clip.streamer_name.clone(),
-        });
+        let _ = app.emit(
+            "export-progress",
+            ExportProgress::ClipStarted {
+                index: clip.index,
+                action_name: clip.action_name.clone(),
+                streamer_name: clip.streamer_name.clone(),
+            },
+        );
 
         // Calculate VOD timestamp
-        let vod_start = clip.game_start_time
-            + clip.action_game_time
-            + clip.sync_offset
-            + clip.in_point;
+        let vod_start =
+            clip.game_start_time + clip.action_game_time + clip.sync_offset + clip.in_point;
 
         let timing = ClipTiming::new(vod_start, clip.out_point - clip.in_point);
 
@@ -121,10 +127,15 @@ pub async fn export_clips(
                 log::error!("Failed to resolve {}: {}", clip.vod_url, e);
                 errors.push(format!("{}: {}", filename, e));
                 failed += 1;
-                let _ = app.emit("export-progress", ExportProgress::ClipCompleted {
-                    index: clip.index,
-                    status: ClipResult::Failed { error: e.to_string() },
-                });
+                let _ = app.emit(
+                    "export-progress",
+                    ExportProgress::ClipCompleted {
+                        index: clip.index,
+                        status: ClipResult::Failed {
+                            error: e.to_string(),
+                        },
+                    },
+                );
                 continue;
             }
         };
@@ -134,41 +145,58 @@ pub async fn export_clips(
         let clip_index = clip.index;
         let progress_callback: Box<dyn Fn(f32, Option<String>) + Send + Sync> =
             Box::new(move |percent, speed| {
-                let _ = app_handle.emit("export-progress", ExportProgress::ClipProgress {
-                    index: clip_index,
-                    percent,
-                    speed,
-                });
+                let _ = app_handle.emit(
+                    "export-progress",
+                    ExportProgress::ClipProgress {
+                        index: clip_index,
+                        percent,
+                        speed,
+                    },
+                );
             });
 
         // Export clip with progress
-        match exporter.export_with_progress(&resolved, &timing, &output_path, Some(&progress_callback)).await {
+        match exporter
+            .export_with_progress(&resolved, &timing, &output_path, Some(&progress_callback))
+            .await
+        {
             Ok(()) => {
                 log::info!("Exported: {}", filename);
                 exported += 1;
-                let _ = app.emit("export-progress", ExportProgress::ClipCompleted {
-                    index: clip.index,
-                    status: ClipResult::Success,
-                });
+                let _ = app.emit(
+                    "export-progress",
+                    ExportProgress::ClipCompleted {
+                        index: clip.index,
+                        status: ClipResult::Success,
+                    },
+                );
             }
             Err(e) => {
                 log::error!("Failed to export {}: {}", filename, e);
                 errors.push(format!("{}: {}", filename, e));
                 failed += 1;
-                let _ = app.emit("export-progress", ExportProgress::ClipCompleted {
-                    index: clip.index,
-                    status: ClipResult::Failed { error: e.to_string() },
-                });
+                let _ = app.emit(
+                    "export-progress",
+                    ExportProgress::ClipCompleted {
+                        index: clip.index,
+                        status: ClipResult::Failed {
+                            error: e.to_string(),
+                        },
+                    },
+                );
             }
         }
     }
 
     // Emit finished event
-    let _ = app.emit("export-progress", ExportProgress::Finished {
-        exported,
-        skipped,
-        failed,
-    });
+    let _ = app.emit(
+        "export-progress",
+        ExportProgress::Finished {
+            exported,
+            skipped,
+            failed,
+        },
+    );
 
     Ok(ExportResult {
         exported,
@@ -248,7 +276,11 @@ pub fn get_proxy_url(url: String) -> String {
 fn generate_filename(action_id: &str, action_name: &str) -> String {
     let safe_action = sanitize_filename(action_name);
     // Use first 6 chars of action_id for short identifier
-    let id_short = if action_id.len() > 6 { &action_id[..6] } else { action_id };
+    let id_short = if action_id.len() > 6 {
+        &action_id[..6]
+    } else {
+        action_id
+    };
     format!("{}_{}.mp4", id_short, safe_action)
 }
 
@@ -336,8 +368,8 @@ pub async fn set_work_dir(path: String) -> Result<(), String> {
 /// Open a folder picker dialog and return the selected path
 #[tauri::command]
 pub async fn pick_work_dir(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
     use std::sync::mpsc;
+    use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = mpsc::channel();
 
@@ -360,27 +392,23 @@ pub async fn pick_work_dir(app: tauri::AppHandle) -> Result<Option<String>, Stri
 /// Save a project to disk
 #[tauri::command]
 pub async fn save_project(project: ProjectFile) -> Result<(), String> {
-    project::save_project(&project.name, &project)
-        .map_err(|e| e.to_string())
+    project::save_project(&project.name, &project).map_err(|e| e.to_string())
 }
 
 /// Load a project from disk
 #[tauri::command]
 pub async fn load_project(project_name: String) -> Result<Option<ProjectFile>, String> {
-    project::load_project(&project_name)
-        .map_err(|e| e.to_string())
+    project::load_project(&project_name).map_err(|e| e.to_string())
 }
 
 /// List all projects on disk
 #[tauri::command]
 pub async fn list_projects() -> Result<Vec<String>, String> {
-    project::list_projects()
-        .map_err(|e| e.to_string())
+    project::list_projects().map_err(|e| e.to_string())
 }
 
 /// Delete a project from disk
 #[tauri::command]
 pub async fn delete_project_files(project_name: String) -> Result<(), String> {
-    project::delete_project(&project_name)
-        .map_err(|e| e.to_string())
+    project::delete_project(&project_name).map_err(|e| e.to_string())
 }

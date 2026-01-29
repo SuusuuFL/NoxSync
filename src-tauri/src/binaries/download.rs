@@ -1,8 +1,8 @@
-use std::path::{Path, PathBuf};
-use std::io::Write;
-use futures_util::StreamExt;
-use crate::error::{BinaryError, BinaryResult};
 use super::paths::{ensure_bin_dir, get_binary_path};
+use crate::error::{BinaryError, BinaryResult};
+use futures_util::StreamExt;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 /// Binary type to download
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -115,8 +115,8 @@ fn extract_ffmpeg_zip(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
     log::info!("Extracting FFmpeg from {:?}", archive_path);
 
     let file = std::fs::File::open(archive_path)?;
-    let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
 
     // Find ffmpeg binary in the archive
     let ffmpeg_name = if cfg!(target_os = "windows") {
@@ -129,7 +129,8 @@ fn extract_ffmpeg_zip(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
     let dest_path = bin_dir.join(ffmpeg_name);
 
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
+        let mut file = archive
+            .by_index(i)
             .map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
 
         let name = file.name().to_string();
@@ -151,7 +152,8 @@ fn extract_ffmpeg_zip(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
 
     // Also extract ffprobe if available
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
+        let mut file = archive
+            .by_index(i)
             .map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
 
         let name = file.name().to_string();
@@ -179,7 +181,7 @@ fn extract_ffmpeg_zip(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
 
     if !ffmpeg_found {
         return Err(BinaryError::ExtractionFailed(
-            "FFmpeg binary not found in archive".to_string()
+            "FFmpeg binary not found in archive".to_string(),
         ));
     }
 
@@ -201,9 +203,14 @@ fn extract_ffmpeg_tar(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
     let dest_path = bin_dir.join("ffmpeg");
     let mut ffmpeg_found = false;
 
-    for entry in archive.entries().map_err(|e| BinaryError::ExtractionFailed(e.to_string()))? {
+    for entry in archive
+        .entries()
+        .map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?
+    {
         let mut entry = entry.map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
-        let path = entry.path().map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
+        let path = entry
+            .path()
+            .map_err(|e| BinaryError::ExtractionFailed(e.to_string()))?;
         let path_str = path.to_string_lossy();
 
         if path_str.ends_with("/ffmpeg") && !path_str.contains("ffprobe") {
@@ -226,7 +233,7 @@ fn extract_ffmpeg_tar(archive_path: &Path, bin_dir: &Path) -> BinaryResult<PathB
 
     if !ffmpeg_found {
         return Err(BinaryError::ExtractionFailed(
-            "FFmpeg binary not found in archive".to_string()
+            "FFmpeg binary not found in archive".to_string(),
         ));
     }
 
@@ -240,7 +247,11 @@ pub async fn download_ffmpeg(progress: Option<ProgressCallback>) -> BinaryResult
 
     // Download to temp file
     let temp_dir = std::env::temp_dir();
-    let archive_ext = if cfg!(target_os = "linux") { "tar.xz" } else { "zip" };
+    let archive_ext = if cfg!(target_os = "linux") {
+        "tar.xz"
+    } else {
+        "zip"
+    };
     let archive_path = temp_dir.join(format!("ffmpeg_download.{}", archive_ext));
 
     download_file(url, &archive_path, progress).await?;

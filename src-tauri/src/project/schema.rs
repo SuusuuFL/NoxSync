@@ -1,7 +1,7 @@
 //! Project schema types for serialization/deserialization.
 
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 // Current schema version removed as unused (was 1)
 
@@ -98,6 +98,3 @@ pub enum ClipStatus {
     Included,
     Excluded,
 }
-
-
-

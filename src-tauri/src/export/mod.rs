@@ -3,12 +3,12 @@ mod progress;
 mod ytdlp;
 
 pub use ffmpeg::FfmpegExporter;
-pub use progress::{ExportProgress, ClipResult, FfmpegProgressParser, YtDlpProgressParser};
+pub use progress::{ClipResult, ExportProgress, FfmpegProgressParser, YtDlpProgressParser};
 pub use ytdlp::YtDlpExporter;
 
-use std::path::Path;
 use crate::error::ExportResult;
 use crate::platform::ResolvedVod;
+use std::path::Path;
 
 /// Clip timing information
 #[derive(Debug, Clone)]
@@ -91,10 +91,14 @@ impl SmartExporter {
         // Use yt-dlp for platform URLs that need extraction
         if vod.is_hls || is_direct_video(&vod.url) {
             log::info!("Using FFmpeg for export");
-            self.ffmpeg.export_with_retry(vod, timing, output_path, progress).await
+            self.ffmpeg
+                .export_with_retry(vod, timing, output_path, progress)
+                .await
         } else {
             log::info!("Using yt-dlp for export");
-            self.ytdlp.export_with_retry(vod, timing, output_path, progress).await
+            self.ytdlp
+                .export_with_retry(vod, timing, output_path, progress)
+                .await
         }
     }
 }
