@@ -321,7 +321,7 @@ export const useStreamerDatabaseStore = create<StreamerDatabaseStore>()(
 
   // Load library from disk
   loadLibrary: (data) => {
-    set((state) => {
+    set(() => {
       // Rebuild index
       const newIndex = new Map<StreamerUniqueKey, string>();
       for (const s of data.globalStreamers) {
