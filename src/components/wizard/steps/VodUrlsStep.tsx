@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
-import { User, Link as LinkIcon, Star } from 'lucide-react';
+import { User, Link as LinkIcon, Star, ExternalLink } from 'lucide-react';
 import { detectPlatform, PLATFORMS } from '@/types';
 import type { SelectedStreamer } from '../types';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useStreamerDatabaseStore } from '@/stores';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 interface VodUrlsStepProps {
   streamers: SelectedStreamer[];
@@ -85,10 +88,33 @@ function StreamerVodInput({
   onUrlChange,
   onSetReference,
 }: StreamerVodInputProps) {
+  const { getGlobalStreamer } = useStreamerDatabaseStore();
   const detectedPlatform = streamer.vodUrl?.trim()
     ? detectPlatform(streamer.vodUrl)
     : streamer.platform;
   const platformConfig = PLATFORMS[detectedPlatform];
+
+  // Get channel name from global database if available
+  const globalStreamer = streamer.globalStreamerId
+    ? getGlobalStreamer(streamer.globalStreamerId)
+    : null;
+
+  const handleOpenVideos = async () => {
+    if (!globalStreamer?.channel) return;
+    
+    let url = '';
+    if (streamer.platform === 'twitch') {
+      url = `https://twitch.tv/${globalStreamer.channel}/videos?filter=archives`;
+    } else if (streamer.platform === 'youtube') {
+      url = `https://youtube.com/@${globalStreamer.channel}/streams`;
+    } else if ((streamer.platform as string) === 'kick') {
+      url = `https://kick.com/${globalStreamer.channel}/videos`;
+    }
+
+    if (url) {
+      await openUrl(url);
+    }
+  };
 
   return (
     <div
@@ -119,21 +145,34 @@ function StreamerVodInput({
         </button>
       </div>
 
-      <div className="relative">
-        <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder={`https://twitch.tv/videos/...`}
-          value={streamer.vodUrl}
-          onChange={(e) => onUrlChange(e.target.value)}
-          className="pl-9 pr-20"
-        />
-        {streamer.vodUrl?.trim() && (
-          <span
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium"
-            style={{ color: platformConfig.color }}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <LinkIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={`https://twitch.tv/videos/...`}
+            value={streamer.vodUrl}
+            onChange={(e) => onUrlChange(e.target.value)}
+            className="pl-9 pr-20"
+          />
+          {streamer.vodUrl?.trim() && (
+            <span
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium"
+              style={{ color: platformConfig.color }}
+            >
+              {platformConfig.name}
+            </span>
+          )}
+        </div>
+
+        {globalStreamer && (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleOpenVideos}
+            title={`Open ${streamer.platform} videos page`}
           >
-            {platformConfig.name}
-          </span>
+            <ExternalLink className="h-4 w-4" />
+          </Button>
         )}
       </div>
 

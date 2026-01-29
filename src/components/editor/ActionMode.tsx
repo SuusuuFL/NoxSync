@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react';
-import { Flag, Plus, Trash2, Edit3, Check, X, Clock, UserPlus } from 'lucide-react';
-import { useProjectStore, useEditorStore } from '@/stores';
-import { formatTime } from '@/types';
+import { Flag, Plus, Trash2, Edit3, Check, X, Clock, UserPlus, ExternalLink } from 'lucide-react';
+import { useProjectStore, useEditorStore, useStreamerDatabaseStore } from '@/stores';
+import { formatTime, type GlobalStreamer } from '@/types';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { StreamerPicker } from '@/components/shared/StreamerPicker';
 import {
   Dialog,
   DialogContent,
@@ -19,8 +21,7 @@ export function ActionMode() {
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [isAddStreamerOpen, setIsAddStreamerOpen] = useState(false);
-  const [newStreamerName, setNewStreamerName] = useState('');
-  const [newStreamerUrl, setNewStreamerUrl] = useState('');
+
 
   const {
     getCurrentProject,
@@ -74,13 +75,7 @@ export function ActionMode() {
     setEditingName('');
   };
 
-  const handleAddStreamer = () => {
-    if (!newStreamerName.trim() || !newStreamerUrl.trim()) return;
-    addStreamer(newStreamerName.trim(), newStreamerUrl.trim());
-    setNewStreamerName('');
-    setNewStreamerUrl('');
-    setIsAddStreamerOpen(false);
-  };
+
 
   const gameTime =
     project.gameStartTime !== null ? currentTime - project.gameStartTime : null;
@@ -314,44 +309,168 @@ export function ActionMode() {
 
       {/* Add Streamer Dialog */}
       <Dialog open={isAddStreamerOpen} onOpenChange={setIsAddStreamerOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Ajouter un Streamer</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Nom du streamer</label>
-              <Input
-                placeholder="Ex: Squeezie"
-                value={newStreamerName}
-                onChange={(e) => setNewStreamerName(e.target.value)}
-              />
-            </div>
+          <AddStreamerContent
+            onAdd={(name, url, globalId) => {
+              addStreamer(name, url, globalId);
+              setIsAddStreamerOpen(false);
+            }}
+            onCancel={() => setIsAddStreamerOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">URL de la VOD</label>
-              <Input
-                placeholder="https://www.twitch.tv/videos/..."
-                value={newStreamerUrl}
-                onChange={(e) => setNewStreamerUrl(e.target.value)}
-              />
+interface AddStreamerContentProps {
+  onAdd: (name: string, url: string, globalId?: string | null) => void;
+  onCancel: () => void;
+}
+
+function AddStreamerContent({ onAdd, onCancel }: AddStreamerContentProps) {
+  const { globalStreamers } = useStreamerDatabaseStore();
+  const [mode, setMode] = useState<'database' | 'manual'>('database');
+  const [selectedStreamer, setSelectedStreamer] = useState<GlobalStreamer | null>(null);
+  
+  // Manual state
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+
+  // Helper to open videos page
+  const handleOpenVideos = async (streamer: GlobalStreamer) => {
+    if (!streamer.channel) return;
+    
+    let link = '';
+    if (streamer.platform === 'twitch') {
+      link = `https://twitch.tv/${streamer.channel}/videos?filter=archives`;
+    } else if (streamer.platform === 'youtube') {
+      link = `https://youtube.com/@${streamer.channel}/streams`;
+    } else if ((streamer.platform as string) === 'kick') {
+      link = `https://kick.com/${streamer.channel}/videos`;
+    }
+
+    if (link) {
+      await openUrl(link);
+    }
+  };
+
+  if (selectedStreamer) {
+    return (
+      <div className="space-y-4 py-4">
+        <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border">
+          {selectedStreamer.avatarUrl ? (
+            <img src={selectedStreamer.avatarUrl} alt="" className="w-10 h-10 rounded-full" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
+              <UserPlus className="w-5 h-5 text-muted-foreground" />
             </div>
+          )}
+          <div>
+            <div className="font-semibold">{selectedStreamer.displayName}</div>
+            <div className="text-xs text-muted-foreground capitalize">{selectedStreamer.platform}</div>
           </div>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setSelectedStreamer(null)}>
+            Changer
+          </Button>
+        </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddStreamerOpen(false)}>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">URL de la VOD</label>
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => handleOpenVideos(selectedStreamer)}
+              title="Ouvrir la page des vidéos"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter>
+           <Button variant="outline" onClick={onCancel}>Annuler</Button>
+           <Button 
+             onClick={() => onAdd(selectedStreamer.displayName, url, selectedStreamer.id)}
+             disabled={!url.trim()}
+           >
+             Ajouter
+           </Button>
+        </DialogFooter>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 py-4">
+      <div className="flex gap-2 mb-4">
+        <Button 
+          variant={mode === 'database' ? 'default' : 'outline'} 
+          className="flex-1"
+          onClick={() => setMode('database')}
+        >
+          Base de données
+        </Button>
+        <Button 
+          variant={mode === 'manual' ? 'default' : 'outline'} 
+          className="flex-1"
+          onClick={() => setMode('manual')}
+        >
+          Manuel
+        </Button>
+      </div>
+
+      {mode === 'database' ? (
+        <div className="border rounded-lg p-1">
+          <StreamerPicker
+            streamers={globalStreamers}
+            selectedIds={[]}
+            onToggle={(s) => setSelectedStreamer(s)}
+            singleSelect
+          />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Nom du streamer</label>
+            <Input
+              placeholder="Ex: Squeezie"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">URL de la VOD</label>
+            <Input
+              placeholder="https://..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={onCancel}>
               Annuler
             </Button>
             <Button
-              onClick={handleAddStreamer}
-              disabled={!newStreamerName.trim() || !newStreamerUrl.trim()}
+              onClick={() => onAdd(name, url, null)}
+              disabled={!name.trim() || !url.trim()}
             >
               Ajouter
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }
