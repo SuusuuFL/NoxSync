@@ -1,6 +1,5 @@
-import { useMemo } from 'react';
-
-const PROXY_PORT = 9878;
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
 function needsProxying(url: string): boolean {
   if (!url) return false;
@@ -20,19 +19,35 @@ function needsProxying(url: string): boolean {
 }
 
 export function useProxyUrl(originalUrl: string): string {
-  return useMemo(() => {
-    if (needsProxying(originalUrl)) {
-      const encoded = encodeURIComponent(originalUrl);
-      return `http://localhost:${PROXY_PORT}/proxy?url=${encoded}`;
+  const [proxyUrl, setProxyUrl] = useState<string>(originalUrl);
+
+  useEffect(() => {
+    if (!originalUrl || !needsProxying(originalUrl)) {
+      setProxyUrl(originalUrl);
+      return;
     }
-    return originalUrl;
+
+    invoke<string>('get_proxy_url', { url: originalUrl })
+      .then(setProxyUrl)
+      .catch((err) => {
+        console.error('Failed to get proxy URL:', err);
+        setProxyUrl(originalUrl);
+      });
   }, [originalUrl]);
+
+  return proxyUrl;
 }
 
-export function getProxyUrl(originalUrl: string): string {
-  if (needsProxying(originalUrl)) {
-    const encoded = encodeURIComponent(originalUrl);
-    return `http://localhost:${PROXY_PORT}/proxy?url=${encoded}`;
+export async function getProxyUrl(originalUrl: string): Promise<string> {
+  if (!needsProxying(originalUrl)) {
+    return originalUrl;
   }
-  return originalUrl;
+  
+  try {
+    return await invoke<string>('get_proxy_url', { url: originalUrl });
+  } catch (err) {
+    console.error('Failed to get proxy URL:', err);
+    return originalUrl;
+  }
 }
+

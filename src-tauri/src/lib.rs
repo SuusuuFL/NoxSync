@@ -26,10 +26,13 @@ pub fn run() {
     log::info!("Starting Nox v{}", env!("CARGO_PKG_VERSION"));
 
     // Start HLS proxy server in background
-    std::thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(proxy::start_proxy_server());
-    });
+    // First, find an available port synchronously
+    if proxy::init_proxy_port().is_some() {
+        std::thread::spawn(|| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(proxy::start_proxy_server());
+        });
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())

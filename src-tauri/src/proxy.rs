@@ -7,9 +7,14 @@ use axum::{
 };
 use serde::Deserialize;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU16, Ordering};
 use tower_http::cors::{Any, CorsLayer};
 
-pub const PROXY_PORT: u16 = 9878;
+const BASE_PROXY_PORT: u16 = 9878;
+const MAX_PORT_ATTEMPTS: u16 = 10;
+
+/// The currently active proxy port (set when server starts, 0 = not initialized)
+static ACTIVE_PORT: AtomicU16 = AtomicU16::new(0);
 
 #[derive(Clone)]
 struct ProxyState {
@@ -55,7 +60,7 @@ fn rewrite_uri_attribute(base_url: &str, line: &str) -> String {
                 let resolved = resolve_url(base_url, uri);
                 let proxied = format!(
                     "http://localhost:{}/proxy?url={}",
-                    PROXY_PORT,
+                    ACTIVE_PORT.load(Ordering::Relaxed),
                     urlencoding::encode(&resolved)
                 );
 
@@ -120,7 +125,7 @@ async fn proxy_handler(
                                 let resolved = resolve_url(url, trimmed);
                                 format!(
                                     "http://localhost:{}/proxy?url={}",
-                                    PROXY_PORT,
+                                    ACTIVE_PORT.load(Ordering::Relaxed),
                                     urlencoding::encode(&resolved)
                                 )
                             })
@@ -159,7 +164,42 @@ async fn proxy_handler(
     }
 }
 
+/// Initialize proxy port synchronously (call before starting the server)
+/// Returns the port that will be used, or None if no port is available
+pub fn init_proxy_port() -> Option<u16> {
+    use std::net::TcpListener;
+    
+    for port_offset in 0..MAX_PORT_ATTEMPTS {
+        let port = BASE_PROXY_PORT + port_offset;
+        let addr = format!("127.0.0.1:{}", port);
+        
+        // Try to bind synchronously to check if port is available
+        match TcpListener::bind(&addr) {
+            Ok(_listener) => {
+                // Port is available, store it and drop the listener
+                // (we'll rebind in the async server)
+                ACTIVE_PORT.store(port, Ordering::Relaxed);
+                log::info!("[Proxy] Reserved port {} for HLS proxy", port);
+                return Some(port);
+            }
+            Err(e) => {
+                log::warn!("[Proxy] Port {} unavailable: {}", port, e);
+            }
+        }
+    }
+    
+    log::error!("[Proxy] Failed to find available port in range {}-{}", 
+        BASE_PROXY_PORT, BASE_PROXY_PORT + MAX_PORT_ATTEMPTS - 1);
+    None
+}
+
 pub async fn start_proxy_server() {
+    let port = ACTIVE_PORT.load(Ordering::Relaxed);
+    if port == 0 {
+        log::error!("[Proxy] No port initialized, call init_proxy_port first");
+        return;
+    }
+    
     let state = Arc::new(ProxyState {
         client: reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -177,18 +217,29 @@ pub async fn start_proxy_server() {
         .layer(cors)
         .with_state(state);
 
-    let addr = format!("127.0.0.1:{}", PROXY_PORT);
-    log::info!("[Proxy] Starting HLS proxy on {}", addr);
-
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let addr = format!("127.0.0.1:{}", port);
+    
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(l) => {
+            log::info!("[Proxy] HLS proxy started on {}", addr);
+            l
+        }
+        Err(e) => {
+            log::error!("[Proxy] Failed to bind to {}: {}", addr, e);
+            return;
+        }
+    };
+    
+    if let Err(e) = axum::serve(listener, app).await {
+        log::error!("[Proxy] Server error: {}", e);
+    }
 }
 
 /// Get proxy URL for a remote URL
 pub fn get_proxy_url(original_url: &str) -> String {
     format!(
         "http://localhost:{}/proxy?url={}",
-        PROXY_PORT,
+        ACTIVE_PORT.load(Ordering::Relaxed),
         urlencoding::encode(original_url)
     )
 }
